@@ -1,0 +1,288 @@
+---
+title: Painel de Acompanhamento da Pesquisa de Acompanhamento dos Egressos Senac 2026
+format: 
+  dashboard:
+    scrolling: true
+    lang: pt-br
+    expandable: false
+include-in-header: css/custom-theme.css
+navbar: false
+server: shiny
+---
+
+
+
+```{r}
+#| label: importar
+#| message: false
+#| context: setup
+
+library(shiny)
+library(bslib)
+library(bsicons)
+options(box.path = here::here())
+
+box::use(
+  dplyr[`%>%`,
+        filter,
+        mutate] 
+)
+
+
+```
+
+
+```{r}
+#| label: carregar-dados
+#| message: false
+#| context: setup
+
+
+box::use(
+  modulos/carregar_dados[...]
+)
+
+```
+
+
+
+```{r}
+#| label: carregar-visualizacoes
+#| message: false
+#| context: setup
+
+box::use(
+  modulos/caixas_acessos,
+  modulos/global[...],
+  modulos/grafico_taxa,
+  modulos/tp_aparelho,
+  modulos/populacao_e_cadastro,
+  modulos/tabela,
+  modulos/caixas_populacao_brasil,
+  modulos/mapa
+)
+
+
+```
+
+## Row {height="5%"}
+
+```{r}
+#| label: "Titulo do Relatorio"
+```
+![](images/Banner_2026-1.png){width="100%"}
+
+## Row {height="25%" .no-padding}
+
+
+```{r}
+#| label: primeiro-segmento
+uiOutput("PrimeiroSegmento")
+
+```
+
+```{r}
+#| label: processa-dados-primeiro-segmento
+#| context: server
+
+
+dados_primarios <- dados_sharepoint()
+
+output$PrimeiroSegmento <- renderUI({
+saida <- card(
+card_header("População e cadastro"),
+card_body(
+populacao_e_cadastro$ui("CaixasPopulacao")
+)
+)
+
+saida
+})
+
+DR_selecionado <- reactive({
+  req(input$DR)
+  req(!is.null(input$DR))
+  
+  input$DR
+
+})
+
+populacao_filtrada <- reactive({
+  print(DR_selecionado())
+  
+  saida <- dados_populacao %>% 
+    filter(DR == DR_selecionado())
+  
+  
+  saida
+
+})
+
+populacao_e_cadastro$server("CaixasPopulacao", 
+                             populacao_filtrada)
+
+
+
+dados_filtrado <- reactive({
+
+  req(DR_selecionado())
+  req(dados_primarios())
+  
+  saida <- dados_primarios()
+
+  
+if(DR_selecionado() != "BR"){
+saida <- saida %>% 
+            filter(DR == DR_selecionado())
+} else {
+return(saida)
+  
+}
+  })
+
+
+
+
+
+
+```
+
+
+
+## Row {height="33%" .no-padding}
+
+```{r}
+#| label: segundo-segmento
+
+uiOutput("segundoSegmento")
+
+```
+
+
+```{r}
+#| label: processa-dados-segundo-segmento
+#| context: server
+
+
+
+output$segundoSegmento <- renderUI({
+saida <-   card(
+  card_header("Informações do acesso ao questionário"),
+  card_body(
+    layout_columns(
+      col_widths = c(3, 5, 4),
+      caixas_acessos$ui("SegundoSegmento-Caixas"),
+      card(
+        id = "grafico-taxa-resposta",
+        class = "card-grafico",
+        height = "400px",
+        card_body_fill(
+          grafico_taxa$ui("SegundoSegmento-Acessos")
+        )
+      ),
+      card(
+        class = "card-grafico",
+        height = "400px",
+        card_body(id = "tipo-de-aparelho",
+          tp_aparelho$ui("SegundoSegmento-TipoDeAparelho")
+        )
+        
+      )
+    )
+  )
+)
+saida
+})
+
+caixas_acessos$server("SegundoSegmento-Caixas", 
+                      dados_filtrado)
+
+grafico_taxa$server("SegundoSegmento-Acessos",
+                    dados_filtrado,
+                    DR_selecionado)
+
+tp_aparelho$server("SegundoSegmento-TipoDeAparelho",
+                   dados_filtrado,
+                   DR_selecionado) 
+
+```
+
+## Row {height="46%" .no-padding}
+
+```{r}
+#| label: terceiro-segmento
+
+uiOutput("TerceiroSegmento")
+
+
+
+```
+
+
+
+```{r}
+#| label: processa-dados-terceiro-segmento
+#| context: server
+
+output$TerceiroSegmento <- renderUI({
+
+        
+saida <- card(
+    card_header("Questionários válidos e Taxa de resposta",
+    ),
+    
+    card_body(
+              layout_columns(
+        col_widths = c(4, 4, 4, 6,6),
+        !!!caixas_populacao_brasil$ui("TerceiroSegmento-Caixas"),
+        card(id = "tabela-terceiro-segmento",
+min_width = "400px",
+             card_body(
+                 min_height = "750px",
+                 tabela$ui("TerceiroSegmento-Tabela")
+             )
+        ),
+         card(id = "mapa-terceiro-segmento",
+              min_width = "400px",
+              card_body(
+                min_height = "750px",
+                mapa$ui("TerceiroSegmento-Mapa")
+              ))
+)
+    )
+    )
+
+saida
+})
+
+dados_brasil_filtrado <- reactive({
+  req(dados_primarios())
+  dados_primarios()
+})
+
+populacao_brasil_filtrado <- reactive({
+  req(DR_selecionado())
+  dados_populacao %>%
+filter(DR == "BR")
+})
+
+caixas_populacao_brasil$server("TerceiroSegmento-Caixas", 
+                               dados_brasil_filtrado,
+                               populacao_brasil_filtrado)
+
+tabela$server("TerceiroSegmento-Tabela", 
+              dados_brasil_filtrado)
+
+mapa$server("TerceiroSegmento-Mapa",
+            brasil,
+            dados_brasil_filtrado)
+
+
+```
+
+
+
+
+
+
+
